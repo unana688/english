@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#18213a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="跟读英语本">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>跟读英语本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+/* Layout: notebook — folder tabs on the left (chips on phone), entry cards on ruled paper, sticky player bar at the bottom */
+:root{
+  --paper:#f3f5f8; --sheet:#ffffff; --ink:#18213a; --muted:#5d6782; --rule:#dfe4ee;
+  --accent:#2747c9; --accent-soft:#e6ebfb; --mark:#ffe36b; --mark-ink:#3d3200; --danger:#b42335; --ok:#18794e;
+  --f-en:"Newsreader", Georgia, "Times New Roman", serif;
+  --f-ui:"Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#11141c; --sheet:#1a1f2b; --ink:#e8ecf6; --muted:#9aa4bd; --rule:#2a3142;
+  --accent:#8ea4ff; --accent-soft:#232c4a; --mark:#e9c93a; --mark-ink:#1c1600; --danger:#ff7b8b; --ok:#5fd3a0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#11141c; --sheet:#1a1f2b; --ink:#e8ecf6; --muted:#9aa4bd; --rule:#2a3142;
+  --accent:#8ea4ff; --accent-soft:#232c4a; --mark:#e9c93a; --mark-ink:#1c1600; --danger:#ff7b8b; --ok:#5fd3a0; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 140px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+h1{font-family:var(--f-en);font-weight:600;font-size:1.75rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-family:var(--f-ui);font-size:.8rem;font-weight:400;color:var(--muted);letter-spacing:0}
+.accent-switch{display:inline-flex;background:var(--sheet);border:1px solid var(--rule);border-radius:999px;padding:3px}
+.accent-switch button{border:0;background:none;border-radius:999px;padding:6px 14px;font-weight:500;color:var(--muted)}
+.accent-switch button[aria-pressed="true"]{background:var(--ink);color:var(--sheet)}
+.accent-switch b{font-family:var(--f-mono);font-size:.75rem;margin-right:4px}
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:760px){.layout{grid-template-columns:minmax(0,1fr)}}
+/* folders */
+.folders{display:flex;flex-direction:column;gap:4px}
+@media (max-width:760px){.folders{flex-direction:row;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.folders::-webkit-scrollbar{display:none}}
+.folder{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid transparent;background:none;text-align:left;padding:9px 12px;border-radius:10px;white-space:nowrap;color:var(--ink)}
+.folder:hover{background:var(--sheet)}
+.folder[aria-current="true"]{background:var(--sheet);border-color:var(--rule);font-weight:700}
+.folder .n{font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+.folder.add{color:var(--accent);font-weight:500}
+.folder-tools{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+@media (max-width:760px){.folder-tools{margin-top:4px}}
+.link{border:0;background:none;color:var(--muted);font-size:.82rem;padding:4px 6px;border-radius:6px}
+.link:hover{color:var(--ink);background:var(--sheet)}
+.link.danger:hover{color:var(--danger)}
+/* toolbar */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.bar .grow{flex:1 1 180px;min-width:0}
+input[type=search],input[type=text],textarea,select{font-size:16px;width:100%;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:9px 12px}
+textarea{resize:vertical;min-height:64px}
+.btn{border:1px solid var(--rule);background:var(--sheet);border-radius:10px;padding:8px 14px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#0b1020}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#0b1020}}
+.btn.danger{color:var(--danger)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--sheet)}
+.seg button{border:0;background:none;padding:7px 12px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+/* editor */
+.editor{background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r);padding:16px;margin-bottom:14px;display:grid;gap:10px}
+.editor .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:520px){.editor .row{grid-template-columns:minmax(0,1fr)}}
+.editor label{display:grid;gap:4px;font-size:.8rem;color:var(--muted)}
+.editor .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+/* entries */
+.list{display:grid;gap:10px}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r);padding:14px 14px 12px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px}
+.card.playing{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.en{font-family:var(--f-en);font-size:1.3rem;line-height:1.35;word-break:break-word}
+.card.sentence .en{font-size:1.12rem}
+.en mark{background:linear-gradient(transparent 55%,var(--mark) 55%);color:inherit}
+.kind{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:8px;vertical-align:middle}
+.zh{color:var(--ink);opacity:.85}
+.note{color:var(--muted);font-size:.85rem}
+.sample{font-size:.7rem;color:var(--mark-ink);background:var(--mark);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+.side{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.play{width:44px;height:44px;border-radius:50%;border:0;background:var(--ink);color:var(--sheet);display:grid;place-items:center}
+.play svg{width:18px;height:18px;fill:currentColor}
+.mini{display:flex;flex-wrap:wrap;gap:4px;grid-column:1 / -1;border-top:1px dashed var(--rule);padding-top:8px;margin-top:4px}
+.mini .link{font-size:.8rem}
+.mini .link.on{color:var(--accent);font-weight:600}
+.rec{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--accent-soft);border-radius:10px;padding:10px}
+.rec audio{height:36px;max-width:100%}
+.rec .hint{font-size:.8rem;color:var(--muted);flex-basis:100%}
+.empty{background:var(--sheet);border:1px dashed var(--rule);border-radius:var(--r);padding:28px;text-align:center;color:var(--muted)}
+/* bottom player */
+.player{position:fixed;left:0;right:0;bottom:0;background:var(--sheet);border-top:1px solid var(--rule);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:5}
+.player .in{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.player .now{flex:1 1 220px;min-width:0}
+.player .now .t{font-family:var(--f-en);font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player .now .s{font-size:.78rem;color:var(--muted)}
+.player .now .s.go{color:var(--ok);font-weight:700}
+.ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.ctl label{display:flex;gap:6px;align-items:center}
+.ctl input[type=range]{width:90px;accent-color:var(--accent)}
+.ctl select{width:auto;max-width:150px;padding:5px 8px;font-size:16px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.meter{height:3px;background:var(--rule);border-radius:2px;overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;width:0;background:var(--ok);transition:width .1s linear}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(110px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--sheet);padding:8px 14px;border-radius:999px;font-size:.85rem;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1}
+.confirm{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:.85rem;color:var(--danger)}
+.status{font-size:.75rem;color:var(--muted)}
+.notice{background:var(--accent-soft);border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:.88rem}
+.backup{border-top:1px solid var(--rule);padding-top:8px}
+@media (max-width:760px){.notice{background:var(--accent-soft);border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:.88rem}
+.backup{border-top:0;padding-top:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>跟读英语本<small>单词 · 句子 · 美音/英音朗读 · 跟读练习</small></h1>
+    <div class="accent-switch" role="group" aria-label="发音">
+      <button id="acc-us" aria-pressed="true"><b>US</b>美音</button>
+      <button id="acc-uk" aria-pressed="false"><b>UK</b>英音</button>
+    </div>
+  </header>
+
+  <p class="notice" id="notice" hidden></p>
+  <div class="layout">
+    <aside>
+      <nav class="folders" id="folders" aria-label="文件夹"></nav>
+      <div class="folder-tools" id="folder-tools"></div>
+      <div class="folder-tools backup">
+        <button class="link" id="btn-export">⤓ 导出备份</button>
+        <label class="link" for="imp" style="cursor:pointer">⤒ 导入备份</label>
+        <input type="file" id="imp" accept=".json,application/json" hidden>
+      </div>
+      <p class="status" id="sync-status"></p>
+    </aside>
+
+    <main>
+      <div class="bar">
+        <input class="grow" type="search" id="q" placeholder="搜索英文或中文…" aria-label="搜索">
+        <div class="seg" role="group" aria-label="类型筛选">
+          <button data-f="all" aria-pressed="true">全部</button>
+          <button data-f="word" aria-pressed="false">单词</button>
+          <button data-f="sentence" aria-pressed="false">句子</button>
+        </div>
+        <button class="btn primary" id="btn-add">＋ 添加</button>
+      </div>
+
+      <form class="editor" id="editor" hidden>
+        <div class="seg" role="group" aria-label="类型" id="ed-kind">
+          <button type="button" data-k="word" aria-pressed="true">单词</button>
+          <button type="button" data-k="sentence" aria-pressed="false">句子</button>
+        </div>
+        <label>英文<textarea id="ed-en" rows="2" placeholder="例如：resilient / I'd rather walk than take the bus." required></textarea></label>
+        <div class="row">
+          <label>中文意思<input type="text" id="ed-zh" placeholder="例如：有韧性的"></label>
+          <label>放到文件夹<select id="ed-folder"></select></label>
+        </div>
+        <label>笔记（音标、例句、搭配，可不填）<input type="text" id="ed-note" placeholder="/rɪˈzɪliənt/  be resilient to …"></label>
+        <div class="actions">
+          <button type="button" class="btn" id="ed-preview">▶ 试听</button>
+          <button type="button" class="btn" id="ed-cancel">取消</button>
+          <button type="submit" class="btn primary" id="ed-save">保存</button>
+        </div>
+      </form>
+
+      <div class="bar">
+        <button class="btn" id="btn-playall">▶ 连续播放本文件夹</button>
+        <button class="btn" id="btn-shadowall">🎙 跟读本文件夹</button>
+        <span class="status" id="count"></span>
+      </div>
+
+      <div class="list" id="list"></div>
+    </main>
+  </div>
+</div>
+
+<div class="player" id="player">
+  <div class="in">
+    <div class="now">
+      <div class="t" id="now-t">点任意条目的 ▶ 播放，或点「跟读」开始练习</div>
+      <div class="s" id="now-s">跟读模式：先播放原声，再留出时间让你跟着读</div>
+      <div class="meter"><i id="meter"></i></div>
+    </div>
+    <div class="ctl">
+      <label>语速 <input type="range" id="rate" min="0.5" max="1.3" step="0.05" value="0.9"> <span class="num" id="rate-v">0.90</span></label>
+      <label>跟读遍数 <select id="reps"><option>1</option><option selected>2</option><option>3</option><option>5</option></select></label>
+      <label>声音 <select id="voice"></select></label>
+      <button class="btn" id="btn-stop">■ 停止</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+const LS_KEY="echo-notebook-v1", PREF_KEY="echo-notebook-prefs";
+
+/* ---------- data ---------- */
+function sampleData(){
+  const f1=uid(),f2=uid();
+  return {folders:[{id:f1,name:"日常口语"},{id:f2,name:"高频单词"}],items:[
+    {id:uid(),folder:f2,kind:"word",en:"resilient",zh:"有韧性的；能迅速恢复的",note:"US /rɪˈzɪliənt/  be resilient to stress",sample:true,t:Date.now()-4000},
+    {id:uid(),folder:f2,kind:"word",en:"schedule",zh:"日程表",note:"美音 /ˈskedʒuːl/，英音常读 /ˈʃedjuːl/，切换听听区别",sample:true,t:Date.now()-3000},
+    {id:uid(),folder:f1,kind:"sentence",en:"Could you give me a hand with this?",zh:"你能帮我一下吗？",note:"give sb. a hand = 帮忙",sample:true,t:Date.now()-2000},
+    {id:uid(),folder:f1,kind:"sentence",en:"I'd rather walk than take the bus today.",zh:"我今天宁愿走路也不坐公交。",note:"would rather A than B",sample:true,t:Date.now()-1000}
+  ]};
+}
+let data=null;
+try{const raw=localStorage.getItem(LS_KEY); if(raw) data=JSON.parse(raw);}catch(e){}
+if(!data||!Array.isArray(data.folders)) data=sampleData();
+let prefs={accent:"en-US",rate:0.9,reps:2,voiceUS:"",voiceUK:""};
+try{Object.assign(prefs,JSON.parse(localStorage.getItem(PREF_KEY)||"{}"));}catch(e){}
+let cur="all", filter="all", query="", editingId=null, edKind="word", confirmFolder=false, confirmItem=null, recFor=null;
+const recordings={}; // itemId -> objectURL (this session only)
+
+/* ---------- local save ---------- */
+const statusEl=$("#sync-status");
+function setStatus(t){statusEl.textContent=t;}
+function persist(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(data));setStatus("已保存在本机 · 记得定期导出备份");}
+  catch(e){setStatus("保存失败：手机存储可能已满");}
+}
+function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify(prefs));}catch(e){}}
+setStatus("已保存在本机 · 记得定期导出备份");
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
+
+/* recordings kept in IndexedDB so they survive closing the app */
+const recDB=new Promise(res=>{
+  try{const r=indexedDB.open("echo-recordings",1);
+    r.onupgradeneeded=()=>r.result.createObjectStore("rec");
+    r.onsuccess=()=>res(r.result); r.onerror=()=>res(null);}catch(e){res(null);}
+});
+async function recPut(id,blob){const db=await recDB;if(!db)return;try{db.transaction("rec","readwrite").objectStore("rec").put(blob,id);}catch(e){}}
+async function recDel(id){const db=await recDB;if(!db)return;try{db.transaction("rec","readwrite").objectStore("rec").delete(id);}catch(e){}}
+(async()=>{const db=await recDB;if(!db)return;
+  try{const st=db.transaction("rec").objectStore("rec");const req=st.openCursor();
+    req.onsuccess=()=>{const c=req.result;if(c){recordings[c.key]=URL.createObjectURL(c.value);c.continue();}else render();};}catch(e){}})();
+
+/* export / import */
+function exportData(){
+  const payload={app:"echo-notebook",version:1,exported:new Date().toISOString(),folders:data.folders,items:data.items};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  const name=`跟读英语本-备份-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
+  const file=new File([blob],name,{type:"application/json"});
+  const touch=matchMedia("(pointer:coarse)").matches;
+  if(touch&&navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:name}).catch(()=>{});return;}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); toast("已导出 "+name);
+}
+function importData(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!Array.isArray(d.folders)||!Array.isArray(d.items)) throw 0;
+      const fIds=new Set(data.folders.map(f=>f.id)), iIds=new Set(data.items.map(i=>i.id));
+      let nf=0,ni=0;
+      d.folders.forEach(f=>{if(f&&f.id&&f.name&&!fIds.has(f.id)){data.folders.push({id:f.id,name:String(f.name)});nf++;}});
+      d.items.forEach(i=>{if(i&&i.id&&i.en&&!iIds.has(i.id)){data.items.push({id:i.id,folder:i.folder,kind:i.kind==="sentence"?"sentence":"word",en:String(i.en),zh:String(i.zh||""),note:String(i.note||""),t:+i.t||Date.now(),...(i.sample?{sample:true}:{})});ni++;}});
+      persist(); render(); toast(`导入完成：${nf} 个文件夹，${ni} 条内容`);
+    }catch(e){toast("这个文件不是跟读英语本的备份，没有导入");}
+  };
+  r.readAsText(file);
+}
+
+/* ---------- speech ---------- */
+const synth=window.speechSynthesis;
+let voices=[];
+function loadVoices(){
+  if(!synth) return;
+  voices=synth.getVoices().filter(v=>/^en[-_]/i.test(v.lang));
+  fillVoiceSelect();
+}
+function voicesFor(acc){
+  const re=acc==="en-GB"?/^en[-_](GB|UK)/i:/^en[-_]US/i;
+  return voices.filter(v=>re.test(v.lang));
+}
+function fillVoiceSelect(){
+  const sel=$("#voice"), list=voicesFor(prefs.accent);
+  const key=prefs.accent==="en-GB"?"voiceUK":"voiceUS";
+  sel.innerHTML="";
+  if(!list.length){const o=document.createElement("option");o.value="";o.textContent="系统默认";sel.appendChild(o);return;}
+  list.forEach(v=>{const o=document.createElement("option");o.value=v.name;o.textContent=v.name.replace(/^(Microsoft|Google|com\.apple\.[^.]+\.)\s*/i,"").slice(0,28);sel.appendChild(o);});
+  const pref=list.find(v=>v.name===prefs[key])||list.find(v=>/natural|neural|premium|enhanced|samantha|daniel|google/i.test(v.name))||list[0];
+  sel.value=pref.name;
+}
+if(synth){loadVoices(); if(synth.addEventListener) synth.addEventListener("voiceschanged",loadVoices); else synth.onvoiceschanged=loadVoices;}
+else{const n=$("#notice");n.textContent="这个浏览器不支持朗读。请换用系统自带浏览器（iPhone/iPad 用 Safari，三星用三星浏览器或 Chrome，华为用华为浏览器），或电脑上的 Chrome / Edge。";n.hidden=false;}
+setTimeout(()=>{if(synth&&!synth.getVoices().some(v=>/^en/i.test(v.lang))){const n=$("#notice");n.textContent="这台设备暂时没找到英语语音。安卓/鸿蒙：设置 → 辅助功能 →「文字转语音」里下载英语语音包；苹果：设置 → 辅助功能 → 朗读内容 → 声音 → 英语。";n.hidden=false;}},2500);
+
+let runId=0;
+function speak(text){
+  return new Promise(res=>{
+    if(!synth){toast("这个浏览器不支持朗读");return res(0);}
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=prefs.accent; u.rate=prefs.rate;
+    const list=voicesFor(prefs.accent), name=$("#voice").value;
+    const v=list.find(x=>x.name===name)||list[0];
+    if(v) u.voice=v;
+    const t0=performance.now();
+    let done=false; const fin=()=>{if(done)return;done=true;clearInterval(keep);res((performance.now()-t0)/1000);};
+    u.onend=fin; u.onerror=fin;
+    // Chrome pauses long utterances; nudge it
+    const keep=setInterval(()=>{if(synth.speaking&&!synth.paused){synth.pause();synth.resume();}},10000);
+    synth.speak(u);
+  });
+}
+function wait(ms,id,onTick){
+  return new Promise(res=>{const t0=performance.now();
+    const step=()=>{if(id!==runId)return res(false);const p=(performance.now()-t0)/ms;onTick&&onTick(Math.min(1,p));if(p>=1)return res(true);requestAnimationFrame(step);};step();});
+}
+function stopAll(){runId++; if(synth) synth.cancel(); setNow("已停止","点任意条目的 ▶ 播放",""); $("#meter").style.width="0"; markPlaying(null);}
+function setNow(t,s,cls){$("#now-t").textContent=t;const e=$("#now-s");e.textContent=s;e.className="s"+(cls?" "+cls:"");}
+function markPlaying(id){document.querySelectorAll(".card").forEach(c=>c.classList.toggle("playing",c.dataset.id===id));
+  if(id){const c=document.querySelector('.card[data-id="'+id+'"]');c&&c.scrollIntoView({block:"nearest",behavior:"smooth"});}}
+const accName=()=>prefs.accent==="en-GB"?"英音":"美音";
+
+async function playItems(items,shadow){
+  if(!items.length){toast("这个文件夹还没有内容");return;}
+  if(synth) synth.cancel();
+  const id=++runId;
+  for(let i=0;i<items.length;i++){
+    const it=items[i]; markPlaying(it.id);
+    const reps=shadow?prefs.reps:1;
+    for(let r=0;r<reps;r++){
+      if(id!==runId) return;
+      setNow(it.en,(items.length>1?`第 ${i+1}/${items.length} 条 · `:"")+`${accName()}原声`+(shadow?` · 第 ${r+1}/${reps} 遍`:""),"");
+      $("#meter").style.width="0";
+      const dur=await speak(it.en);
+      if(id!==runId) return;
+      if(shadow){
+        const gap=Math.max(1.6,dur*1.35+0.6)*1000;
+        setNow(it.en,"🎙 轮到你了，跟着读出来…","go");
+        await wait(gap,id,p=>{$("#meter").style.width=(p*100)+"%";});
+        $("#meter").style.width="0";
+      }else{ await wait(500,id); }
+    }
+  }
+  if(id===runId){setNow(shadow?"跟读完成 👏":"播放完成","可以换个口音再练一遍","");markPlaying(null);}
+}
+
+/* ---------- recording (follow-along) ---------- */
+let mediaRec=null, chunks=[];
+async function startRecording(itemId){
+  try{
+    if(!navigator.mediaDevices||!window.MediaRecorder) throw 0;
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[]; mediaRec=new MediaRecorder(stream);
+    mediaRec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    mediaRec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());
+      if(recordings[itemId]) URL.revokeObjectURL(recordings[itemId]);
+      const blob=new Blob(chunks,{type:mediaRec.mimeType||"audio/webm"});recordings[itemId]=URL.createObjectURL(blob);recPut(itemId,blob);
+      mediaRec=null; render(); toast("录好了，点「对比」听原声和你的");};
+    mediaRec.start(); render(); return true;
+  }catch(e){ mediaRec=null; return false; }
+}
+function attachFile(itemId,file){
+  if(!file) return;
+  if(recordings[itemId]) URL.revokeObjectURL(recordings[itemId]);
+  recordings[itemId]=URL.createObjectURL(file); recPut(itemId,file); render(); toast("录音已加入，点「对比」听听");
+}
+async function compare(it){
+  const url=recordings[it.id]; if(!url) return;
+  if(synth) synth.cancel(); const id=++runId; markPlaying(it.id);
+  setNow(it.en,`${accName()}原声`,""); await speak(it.en); if(id!==runId) return;
+  await wait(400,id);
+  setNow(it.en,"你的录音","go");
+  const a=new Audio(url);
+  await new Promise(r=>{a.onended=r;a.onerror=r;a.play().catch(r);});
+  if(id===runId){setNow("对比完成","不像的地方可以放慢语速再听",""); markPlaying(null);}
+}
+
+/* ---------- render ---------- */
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const icon={play:'<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>'};
+function visibleItems(){
+  const q=query.trim().toLowerCase();
+  return data.items.filter(it=>(cur==="all"||it.folder===cur)&&(filter==="all"||it.kind===filter)&&
+    (!q||(it.en+" "+it.zh+" "+(it.note||"")).toLowerCase().includes(q))).sort((a,b)=>a.t-b.t);
+}
+function render(){
+  // folders
+  const fEl=$("#folders"); fEl.innerHTML="";
+  const mk=(id,name,n)=>{const b=document.createElement("button");b.className="folder";b.setAttribute("aria-current",String(cur===id));
+    b.innerHTML=`<span>${esc(name)}</span><span class="n">${n}</span>`;b.onclick=()=>{cur=id;confirmFolder=false;render();};fEl.appendChild(b);};
+  mk("all","全部",data.items.length);
+  data.folders.forEach(f=>mk(f.id,"📁 "+f.name,data.items.filter(i=>i.folder===f.id).length));
+  const add=document.createElement("button");add.className="folder add";add.textContent="＋ 新建文件夹";add.onclick=newFolder;fEl.appendChild(add);
+  // folder tools
+  const tEl=$("#folder-tools"); tEl.innerHTML="";
+  const f=data.folders.find(x=>x.id===cur);
+  if(f){
+    if(confirmFolder){
+      const n=data.items.filter(i=>i.folder===f.id).length;
+      tEl.innerHTML=`<span class="confirm">删除「${esc(f.name)}」和里面 ${n} 条？<button class="btn danger" id="fy">删除</button><button class="link" id="fn">取消</button></span>`;
+      $("#fy").onclick=()=>{data.items=data.items.filter(i=>i.folder!==f.id);data.folders=data.folders.filter(x=>x.id!==f.id);cur="all";confirmFolder=false;persist();render();toast("文件夹已删除");};
+      $("#fn").onclick=()=>{confirmFolder=false;render();};
+    }else{
+      tEl.innerHTML=`<button class="link" id="fr">重命名</button><button class="link danger" id="fd">删除文件夹</button>`;
+      $("#fr").onclick=()=>renameFolder(f); $("#fd").onclick=()=>{confirmFolder=true;render();};
+    }
+  }
+  // filter buttons
+  document.querySelectorAll('[data-f]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.f===filter)));
+  // list
+  const items=visibleItems(), L=$("#list"); L.innerHTML="";
+  $("#count").textContent=`${items.length} 条`;
+  if(!items.length){L.innerHTML=`<div class="empty">${query?"没有找到匹配的内容":"这里还是空的。点右上角「＋ 添加」写下第一个单词或句子"}</div>`;return;}
+  const qq=query.trim();
+  items.forEach(it=>{
+    const c=document.createElement("article");c.className="card "+it.kind;c.dataset.id=it.id;
+    let en=esc(it.en); if(qq){try{en=en.replace(new RegExp("("+qq.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig"),"<mark>$1</mark>");}catch(e){}}
+    const folderName=(data.folders.find(x=>x.id===it.folder)||{}).name||"";
+    c.innerHTML=`<div style="min-width:0"><div class="en"><span class="kind">${it.kind==="word"?"word":"sentence"}</span>${en}${it.sample?'<span class="sample">示例</span>':""}</div>
+      ${it.zh?`<div class="zh">${esc(it.zh)}</div>`:""}${it.note?`<div class="note">${esc(it.note)}</div>`:""}</div>
+      <div class="side"><button class="play" aria-label="播放">${icon.play}</button></div>
+      <div class="mini">
+        <button class="link on" data-a="shadow">🎙 跟读</button>
+        <button class="link" data-a="rec">${mediaRec&&recFor===it.id?"⏺ 停止录音":"录我的跟读"}</button>
+        ${recordings[it.id]?'<button class="link on" data-a="cmp">⇄ 对比原声</button>':""}
+        <button class="link" data-a="edit">编辑</button>
+        ${confirmItem===it.id?'<span class="confirm">确定删除？<button class="link danger" data-a="del-y">删除</button><button class="link" data-a="del-n">取消</button></span>':'<button class="link danger" data-a="del">删除</button>'}
+        ${cur==="all"&&folderName?`<span class="status" style="margin-left:auto">📁 ${esc(folderName)}</span>`:""}
+      </div>
+      ${recFor===it.id&&!mediaRec&&!recordings[it.id]?`<div class="rec"><span class="hint">没能打开麦克风。请在手机设置里允许浏览器使用麦克风，或者先用手机录音，再选中录音文件放进来：</span>
+        <input type="file" accept="audio/*" aria-label="选择录音文件"></div>`:""}
+      ${recordings[it.id]?`<div class="rec"><span class="hint">你的跟读录音（已保存，再录一次会替换）</span><audio controls src="${recordings[it.id]}"></audio></div>`:""}`;
+    c.querySelector(".play").onclick=()=>playItems([it],false);
+    c.querySelectorAll("[data-a]").forEach(b=>b.onclick=async()=>{
+      const a=b.dataset.a;
+      if(a==="shadow") playItems([it],true);
+      else if(a==="edit") openEditor(it);
+      else if(a==="del"){confirmItem=it.id;render();}
+      else if(a==="del-n"){confirmItem=null;render();}
+      else if(a==="del-y"){data.items=data.items.filter(x=>x.id!==it.id);recDel(it.id);confirmItem=null;persist();render();toast("已删除");}
+      else if(a==="cmp") compare(it);
+      else if(a==="rec"){
+        if(mediaRec&&recFor===it.id){mediaRec.stop();return;}
+        if(mediaRec) mediaRec.stop();
+        recFor=it.id;
+        const ok=await startRecording(it.id);
+        if(ok){setNow(it.en,"⏺ 正在录音，读完点「停止录音」","go");} else render();
+      }
+    });
+    const fi=c.querySelector('input[type=file]'); if(fi) fi.onchange=e=>attachFile(it.id,e.target.files[0]);
+    L.appendChild(c);
+  });
+}
+
+/* ---------- folders ---------- */
+function inlineName(initial,onDone){
+  const tEl=$("#folder-tools");
+  tEl.innerHTML=`<form id="fnf" style="display:flex;gap:6px;width:100%"><input type="text" id="fn-in" maxlength="30" placeholder="文件夹名称" value="${esc(initial)}"><button class="btn primary">好</button></form>`;
+  const inp=$("#fn-in"); inp.focus(); inp.select();
+  $("#fnf").onsubmit=e=>{e.preventDefault();const v=inp.value.trim();if(!v){render();return;}onDone(v);};
+  inp.onkeydown=e=>{if(e.key==="Escape")render();};
+}
+function newFolder(){inlineName("",name=>{const f={id:uid(),name};data.folders.push(f);cur=f.id;persist();render();toast("已新建「"+name+"」");});}
+function renameFolder(f){inlineName(f.name,name=>{f.name=name;persist();render();});}
+
+/* ---------- editor ---------- */
+function setEdKind(k){edKind=k;document.querySelectorAll('#ed-kind [data-k]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.k===k)));}
+function openEditor(it){
+  editingId=it?it.id:null;
+  const sel=$("#ed-folder"); sel.innerHTML="";
+  if(!data.folders.length){data.folders.push({id:uid(),name:"我的生词"});persist();}
+  data.folders.forEach(f=>{const o=document.createElement("option");o.value=f.id;o.textContent=f.name;sel.appendChild(o);});
+  sel.value=it?it.folder:(data.folders.some(f=>f.id===cur)?cur:data.folders[0].id);
+  $("#ed-en").value=it?it.en:""; $("#ed-zh").value=it?it.zh:""; $("#ed-note").value=it?(it.note||""):"";
+  setEdKind(it?it.kind:"word"); $("#ed-save").textContent=it?"保存修改":"保存";
+  $("#editor").hidden=false; $("#ed-en").focus(); $("#editor").scrollIntoView({block:"nearest",behavior:"smooth"});
+}
+function closeEditor(){$("#editor").hidden=true;editingId=null;}
+document.querySelectorAll('#ed-kind [data-k]').forEach(b=>b.onclick=()=>setEdKind(b.dataset.k));
+$("#ed-en").addEventListener("input",e=>{const v=e.target.value.trim(); if(!editingId) setEdKind(/\s/.test(v)&&v.split(/\s+/).length>2?"sentence":"word");});
+$("#ed-preview").onclick=()=>{const v=$("#ed-en").value.trim(); if(v){if(synth)synth.cancel();++runId;setNow(v,accName()+"试听","");speak(v);}};
+$("#ed-cancel").onclick=closeEditor;
+$("#editor").onsubmit=e=>{
+  e.preventDefault();
+  const en=$("#ed-en").value.trim(); if(!en){toast("先写英文内容");return;}
+  const rec={en,zh:$("#ed-zh").value.trim(),note:$("#ed-note").value.trim(),kind:edKind,folder:$("#ed-folder").value};
+  if(editingId){const it=data.items.find(x=>x.id===editingId); Object.assign(it,rec); delete it.sample;}
+  else data.items.push({id:uid(),t:Date.now(),...rec});
+  persist(); const was=editingId; closeEditor();
+  if(!was && cur!=="all" && cur!==rec.folder) cur=rec.folder;
+  render(); toast(was?"已更新":"已添加");
+  if(!was){ openEditor(); $("#ed-folder").value=rec.folder; setEdKind(rec.kind); }
+};
+
+/* ---------- controls ---------- */
+$("#btn-add").onclick=()=>openEditor(null);
+$("#btn-export").onclick=exportData;
+$("#imp").onchange=e=>{importData(e.target.files[0]);e.target.value="";};
+$("#q").oninput=e=>{query=e.target.value;render();};
+document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;render();});
+$("#btn-playall").onclick=()=>playItems(visibleItems(),false);
+$("#btn-shadowall").onclick=()=>playItems(visibleItems(),true);
+$("#btn-stop").onclick=()=>{if(mediaRec)mediaRec.stop();stopAll();};
+function setAccent(a){prefs.accent=a;savePrefs();$("#acc-us").setAttribute("aria-pressed",String(a==="en-US"));$("#acc-uk").setAttribute("aria-pressed",String(a==="en-GB"));fillVoiceSelect();
+  if(voices.length&&!voicesFor(a).length) toast("这台设备没装"+(a==="en-GB"?"英音":"美音")+"语音，会用默认声音");}
+$("#acc-us").onclick=()=>setAccent("en-US"); $("#acc-uk").onclick=()=>setAccent("en-GB");
+$("#rate").value=prefs.rate; $("#rate-v").textContent=Number(prefs.rate).toFixed(2);
+$("#rate").oninput=e=>{prefs.rate=+e.target.value;$("#rate-v").textContent=prefs.rate.toFixed(2);savePrefs();};
+$("#reps").value=String(prefs.reps); $("#reps").onchange=e=>{prefs.reps=+e.target.value;savePrefs();};
+$("#voice").onchange=e=>{prefs[prefs.accent==="en-GB"?"voiceUK":"voiceUS"]=e.target.value;savePrefs();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!e.target.closest("input,textarea,select")){if(mediaRec)mediaRec.stop();stopAll();}});
+let tt; function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2200);}
+
+setAccent(prefs.accent);
+render();
+if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{});}
+})();
+</script>
+</body>
+</html>

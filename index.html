@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18213a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="referrer" content="no-referrer">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="跟读英语本">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -369,6 +370,7 @@ textarea{resize:vertical;min-height:64px}
 <script>
 (function(){
 "use strict";
+const NET_PREFIX="net:";
 const $=s=>document.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const LS_KEY="echo-notebook-v1", PREF_KEY="echo-notebook-prefs";
@@ -481,7 +483,11 @@ function rankVoices(list,acc,gender){
 }
 function fillVoiceSelect(){
   const sel=$("#voice"), raw=voicesFor(prefs.accent);
-  const ranked=rankVoices(raw,prefs.accent,prefs.gender||"f");
+  const g=prefs.gender||"f";
+  const ranked=rankVoices(raw,prefs.accent,g);
+  // online female voice: preferred over a wrong-gender local voice, after real local female voices
+  const net={v:{name:NET_PREFIX+prefs.accent,lang:prefs.accent},g:"f",net:true,score:g==="f"?150:350};
+  const at=ranked.findIndex(r=>r.score>net.score); if(at<0) ranked.push(net); else ranked.splice(at,0,net);
   const list=ranked.map(r=>r.v);
   $("#g-f")&&$("#g-f").setAttribute("aria-pressed",String((prefs.gender||"f")==="f"));
   $("#g-m")&&$("#g-m").setAttribute("aria-pressed",String(prefs.gender==="m"));
@@ -489,12 +495,15 @@ function fillVoiceSelect(){
   sel.innerHTML="";
   if(!list.length){const o=document.createElement("option");o.value="";o.textContent="系统默认";sel.appendChild(o);return;}
   ranked.forEach(r=>{const o=document.createElement("option");o.value=r.v.name;
+    if(r.net){o.textContent="♀ 网络"+(prefs.accent==="en-GB"?"英音":"美音")+"女声（需联网）";sel.appendChild(o);return;}
     o.textContent=(r.g==="f"?"♀ ":r.g==="m"?"♂ ":"")+r.v.name.replace(/^(Microsoft|Google|com\.apple\.[^.]+\.)\s*/i,"").replace(/\s*-\s*English.*$/i,"").slice(0,26);sel.appendChild(o);});
   const saved=list.find(v=>v.name===prefs[key]);
-  const pref=(saved&&voiceGender(saved,prefs.accent).g!==(prefs.gender==="m"?"f":"m"))?saved:list[0];
+  const savedG=saved?(saved.name.startsWith(NET_PREFIX)?"f":voiceGender(saved,prefs.accent).g):"";
+  const pref=(saved&&savedG!==(prefs.gender==="m"?"f":"m"))?saved:list[0];
   sel.value=pref.name;
   const best=ranked[0];
   const n=$("#notice");
+  if(n) n.hidden=true;
   if(n&&best&&best.g!==(prefs.gender||"f")&&voices.length){
     n.textContent=(prefs.gender==="m"?"这台设备没有":"这台设备暂时没有")+(prefs.accent==="en-GB"?"英音":"美音")+(prefs.gender==="m"?"男声":"女声")+"。iPhone/iPad：설정 → 손쉬운 사용 → 읽기 및 말하기 → 음성 → 영어，下载一个（美音推荐 Ava，英音推荐 Serena 或 Kate）。安卓/华为：设置 →「文字转语音」里下载英语语音包。";
     n.hidden=false;
@@ -505,13 +514,58 @@ else{const n=$("#notice");n.textContent="这个浏览器不支持朗读。请换
 setTimeout(()=>{if(synth&&!synth.getVoices().some(v=>/^en/i.test(v.lang))){const n=$("#notice");n.textContent="这台设备暂时没找到英语语音。安卓/鸿蒙：设置 → 辅助功能 →「文字转语音」里下载英语语音包；苹果：设置 → 辅助功能 → 朗读内容 → 声音 → 英语。";n.hidden=false;}},2500);
 
 let runId=0;
+/* ---------- online voices (used when the phone exposes no suitable voice) ---------- */
+const netAudio=new Audio(); netAudio.preload="auto"; try{netAudio.setAttribute("playsinline","");}catch(e){}
+let netUnlocked=false, netFailed=0;
+const SILENT="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+function unlockNet(){ if(netUnlocked) return; netUnlocked=true; try{netAudio.src=SILENT; const p=netAudio.play(); if(p&&p.catch) p.catch(()=>{netUnlocked=false;});}catch(e){netUnlocked=false;} }
+["touchend","click","keydown"].forEach(ev=>document.addEventListener(ev,unlockNet,{capture:true,passive:true}));
+function chunkText(t){
+  const out=[]; let rest=t.trim();
+  while(rest.length>180){
+    let cut=Math.max(rest.lastIndexOf(". ",180),rest.lastIndexOf("? ",180),rest.lastIndexOf("! ",180),rest.lastIndexOf(", ",180));
+    if(cut<60) cut=rest.lastIndexOf(" ",180); if(cut<1) cut=180;
+    out.push(rest.slice(0,cut+1).trim()); rest=rest.slice(cut+1).trim();
+  }
+  if(rest) out.push(rest); return out;
+}
+function playNetChunk(text,lang){
+  return new Promise((res,rej)=>{
+    const url="https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl="+encodeURIComponent(lang)+"&q="+encodeURIComponent(text);
+    let done=false; const fin=ok=>{if(done)return;done=true;clearTimeout(to);netAudio.onended=netAudio.onerror=null;ok?res():rej(new Error("net"));};
+    const to=setTimeout(()=>fin(false),12000);
+    netAudio.onended=()=>fin(true); netAudio.onerror=()=>fin(false);
+    netAudio.src=url; netAudio.playbackRate=Math.max(0.5,Math.min(2,prefs.rate||1));
+    try{netAudio.defaultPlaybackRate=netAudio.playbackRate;}catch(e){}
+    const p=netAudio.play(); if(p&&p.catch) p.catch(()=>fin(false));
+    netAudio.onplaying=()=>{netAudio.playbackRate=Math.max(0.5,Math.min(2,prefs.rate||1));};
+  });
+}
+let netRun=0;
+async function speakNet(text,lang){
+  const my=++netRun, t0=performance.now();
+  for(const c of chunkText(text)){ if(my!==netRun) break; await playNetChunk(c,lang); }
+  return (performance.now()-t0)/1000;
+}
+function stopNet(){netRun++; try{netAudio.pause();}catch(e){}}
+if(synth){try{const _c=synth.cancel.bind(synth); synth.cancel=()=>{stopNet();_c();};}catch(e){}}
 function speak(text){
+  const sel=$("#voice"), name=sel?sel.value:"";
+  if(name&&name.startsWith(NET_PREFIX)){
+    return speakNet(text,name.slice(NET_PREFIX.length)).then(d=>{netFailed=0;return d;}).catch(()=>{
+      netFailed++; if(netFailed===1) toast("网络女声播放失败（可能没联网），这次先用手机自带的声音");
+      return speakLocal(text);});
+  }
+  return speakLocal(text);
+}
+function speakLocal(text){
   return new Promise(res=>{
     if(!synth){toast("这个浏览器不支持朗读");return res(0);}
     const u=new SpeechSynthesisUtterance(text);
     u.lang=prefs.accent; u.rate=prefs.rate;
-    const list=voicesFor(prefs.accent), name=$("#voice").value;
-    const v=list.find(x=>x.name===name)||list[0];
+    const all=voicesFor(prefs.accent), name=$("#voice").value;
+    const list=rankVoices(all,prefs.accent,prefs.gender||"f").map(r=>r.v);
+    const v=all.find(x=>x.name===name)||list[0];
     if(v) u.voice=v;
     const t0=performance.now();
     let done=false; const fin=()=>{if(done)return;done=true;clearInterval(keep);res((performance.now()-t0)/1000);};

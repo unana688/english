@@ -1,6 +1,6 @@
 {
-  "name": "跟读英语本",
-  "short_name": "跟读英语本",
+  "name": "学习小本本",
+  "short_name": "学习小本本",
   "description": "英语单词和句子记事本：自建文件夹、美音/英音朗读、跟读录音对比",
   "lang": "zh-CN",
   "start_url": "./",

@@ -301,6 +301,9 @@ textarea{resize:vertical;min-height:64px}
 .sbar input::-webkit-search-cancel-button{display:none}
 .sbar .cam,.sbar .go{width:40px;height:40px;border-radius:20px;border:0;display:grid;place-items:center;font-size:18px;flex:none}
 .sbar .cam{background:var(--accent-soft)}
+.sbar .paste{height:40px;border-radius:20px;border:0;padding:0 12px;background:var(--accent-soft);color:var(--accent);font-size:15px;font-weight:700;flex:none;white-space:nowrap}
+.sbar .clr{width:30px;height:30px;border-radius:15px;border:0;background:color-mix(in srgb,var(--ink,#18213a) 10%,transparent);font-size:13px;flex:none;display:grid;place-items:center}
+.sbar input{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .sbar .go{background:var(--accent);color:#fff}
 .s-hint{color:var(--muted);font-size:.85rem;margin:14px 4px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .recent{display:flex;flex-wrap:wrap;gap:8px}
@@ -665,7 +668,9 @@ textarea{resize:vertical;min-height:64px}
   <section class="page" id="pg-search" hidden>
     <header class="top"><h1>搜索</h1><div class="top-r"><span class="acc-pill"><button data-acc="en-US">美</button><button data-acc="en-GB">英</button></span><button class="icon-btn gear" aria-label="设置">⚙️</button></div></header>
     <form class="sbar" id="s-form" autocomplete="off">
-      <input type="search" id="s-in" placeholder="输入英文或中文…" aria-label="输入英文或中文" enterkeyhint="search">
+      <input type="text" inputmode="search" id="s-in" placeholder="输入或粘贴单词…" aria-label="输入或粘贴英文、中文" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button type="button" class="clr" id="s-clr" aria-label="清空" hidden>✕</button>
+      <button type="button" class="paste" id="s-paste" aria-label="粘贴">📋 粘贴</button>
       <button type="button" class="cam" id="s-cam" aria-label="拍照识别">📷</button>
       <button type="submit" class="go" aria-label="搜索">↵</button>
     </form>
@@ -2836,7 +2841,7 @@ function goBack(){
 }
 (()=>{
   let sx=0,sy=0,st=0,on=false,ind=null;
-  const skip=t=>t.closest("input,textarea,select,.folders,.cp-grid,input[type=range],.hw-tb,.qa-svg,.trows .say");
+  const skip=t=>t.closest("input,textarea,select,.sbar,.folders,.cp-grid,input[type=range],.hw-tb,.qa-svg,.trows .say");
   document.addEventListener("touchstart",e=>{
     if(e.touches.length!==1){on=false;return;}
     const t=e.touches[0]; if(skip(e.target)){on=false;return;}
@@ -3051,7 +3056,7 @@ function savedFolders(en){const k=en.trim().toLowerCase();return data.items.filt
 function starBtn(idx,en){const on=savedFolders(en).length>0;return `<button type="button" class="star${on?" on":""}" data-star="${idx}" aria-label="${on?"已收藏":"收藏"}">${on?"★":"☆"}</button>`;}
 let sResults=[];
 function renderSearchHome(){
-  const r=prefs.recent||[];
+  syncSbar(); const r=prefs.recent||[];
   $("#s-body").innerHTML=`<p class="status cam-hint">📷 拍一张照片：题目会讲解，东西会告诉你叫什么，文字会翻译</p><div class="s-hint">${r.length?"最近搜过":"查到的单词点 ☆ 就能放进文件夹"}</div><div class="recent">${r.map(x=>`<button type="button" data-recent="${esc(x)}">${esc(x)}</button>`).join("")}</div>`;
   $("#s-body").querySelectorAll("[data-recent]").forEach(b=>b.onclick=()=>{$("#s-in").value=b.dataset.recent;doSearch(b.dataset.recent);});
 }
@@ -3065,7 +3070,7 @@ function bindResults(){
 }
 async function dictLookup(w){
   const j=await fetchJSON("https://api.dictionaryapi.dev/api/v2/entries/en/"+encodeURIComponent(w.toLowerCase()),7000);
-  if(!Array.isArray(j)) return null;
+  if(!Array.isArray(j)||!j.length) return null;
   const ph=j.flatMap(e=>e.phonetics||[]).filter(p=>p.text);
   const us=ph.find(p=>/-us\./.test(p.audio||"")), uk=ph.find(p=>/-uk\./.test(p.audio||""));
   const ex=j.flatMap(e=>e.meanings||[]).flatMap(m=>(m.definitions||[]).map(d=>d.example)).find(Boolean);
@@ -3074,7 +3079,7 @@ async function dictLookup(w){
 }
 let searchRun=0;
 async function doSearch(q){
-  q=q.trim(); if(!q) return renderSearchHome();
+  q=q.trim(); syncSbar(); if(!q) return renderSearchHome();
   addRecent(q); const my=++searchRun; const box=$("#s-body");
   box.innerHTML=`<div class="s-hint">正在查…</div>`;
   if(CJK.test(q)&&!/[\u3040-\u30ff]/.test(q)&&(myLangs().length>1||mainLang()!=="en")){
@@ -3116,7 +3121,19 @@ async function doSearch(q){
   bindResults();
 }
 $("#s-form").onsubmit=e=>{e.preventDefault();$("#s-in").blur();doSearch($("#s-in").value);};
-$("#s-in").addEventListener("input",()=>{if(!$("#s-in").value.trim()) renderSearchHome();});
+function cleanPasted(t){return String(t||"").replace(/[\u200b\u00a0]/g," ").replace(/^[\s"'“”‘’「」『』《》()（）\[\]【】.,;:!?。，；：！？、·•\-–—*#]+|[\s"'“”‘’「」『』《》()（）\[\]【】.,;:!?。，；：！？、·•\-–—*#]+$/g,"").replace(/\s+/g," ").trim().slice(0,300);}
+function syncSbar(){const has=!!$("#s-in").value;$("#s-clr").hidden=!has;$("#s-paste").hidden=has;}
+function searchPasted(t){const q=cleanPasted(t);if(!q){toast("剪贴板里没有文字");return;}$("#s-in").value=q;syncSbar();$("#s-in").blur();doSearch(q);}
+$("#s-in").addEventListener("input",()=>{syncSbar();if(!$("#s-in").value.trim()) renderSearchHome();});
+$("#s-in").addEventListener("paste",e=>{const t=e.clipboardData&&e.clipboardData.getData("text/plain");
+  if(t){e.preventDefault();const el=$("#s-in"),a=el.selectionStart??el.value.length,b=el.selectionEnd??a;
+    const merged=el.value.slice(0,a)+t+el.value.slice(b);searchPasted(merged);}
+  else setTimeout(()=>searchPasted($("#s-in").value),0);});
+$("#s-paste").onclick=async()=>{
+  try{if(!navigator.clipboard||!navigator.clipboard.readText) throw 0;
+    const t=await navigator.clipboard.readText(); searchPasted(t);}
+  catch(_){const el=$("#s-in");el.focus();toast("长按输入框，点「붙여넣기 / Paste / 粘贴」");}};
+$("#s-clr").onclick=()=>{$("#s-in").value="";syncSbar();renderSearchHome();$("#s-in").focus();};
 $("#s-cam").onclick=()=>{camMode="auto";$("#cam-pick").click();};
 async function camFiles(files){
   closeSheets(); if(!files.length) return;
